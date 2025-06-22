@@ -1,196 +1,142 @@
 import tkinter as tk
-from tkinter import ttk , messagebox
-
-
+from tkinter import ttk, messagebox
+import sqlite3
 
 class Student:
-      def __init__( self ):
-            self.window   =     tk.Tk()
-            self.window.title(   "Student Panel" )
-            self.window.geometry("1440x1024" )
-            self.window.configure(bg= "white")
-            self.window.resizable( False , False )
+    def __init__(self):
+        self.win = tk.Tk()
+        self.win.title("Student Panel")
+        self.win.geometry("1440x1024")
+        self.win.configure(bg="white")
 
-            self.data  = {}
-            self.marks    =   {}
+        self.db = sqlite3.connect("students.db")
+        self.cur = self.db.cursor()
+        self.cur.execute("CREATE TABLE IF NOT EXISTS students (id TEXT PRIMARY KEY, name TEXT, dob TEXT, gender TEXT, address TEXT)")
+        self.cur.execute("CREATE TABLE IF NOT EXISTS marks (sid TEXT, subject TEXT, marks INTEGER)")
 
-            self.body( )
-            self.make_sidebar( )
-            self.goto("Dashboard" )
+        self.body()
+        self.sidebar()
+        self.show("Dashboard")
+        self.win.mainloop()
 
-            self.window.mainloop()
+    def sidebar(self):
+        bar = tk.Frame(self.win, bg="#1E293B")
+        bar.place(x=0, y=0, width=240, height=1024)
+        tk.Label(bar, text="StudentApp", bg="#1E293B", fg="white", font=("Poppins", 20, "bold")).pack(pady=30, padx=20, anchor="w")
+        opts = ["Dashboard", "Add Student", "Add Marks", "Report", "Exit"]
+        self.btns = {}
+        for name in opts:
+            b = tk.Button(bar, text=name, bg="#1E293B", fg="white", font=("Poppins", 13), anchor="w", padx=30,
+                          activebackground="#3B82F6", command=lambda x=name: self.show(x))
+            b.pack(fill="x", pady=4)
+            self.btns[name] = b
 
+    def body(self):
+        self.main = tk.Frame(self.win, bg="white")
+        self.main.place(x=240, y=0, width=1200, height=1024)
 
+    def clear(self):
+        for i in self.main.winfo_children():
+            i.destroy()
 
-      def make_sidebar( self ):
-            left = tk.Frame( self.window , bg="#1E293B"   )
-            left.place( x=0 , y=0, width=240 , height=1024 )
+    def show(self, name):
+        if hasattr(self, "cur_btn"):
+            self.btns[self.cur_btn].config(bg="#1E293B")
+        self.btns[name].config(bg="#3B82F6")
+        self.cur_btn = name
+        self.clear()
 
-            tk.Label( left, text="StudentApp" , fg="white" , bg="#1E293B" ,
-                      font=( "Poppins" , 20 , "bold" )).pack(pady=(40,25) , anchor="w" , padx=20)
+        if name == "Dashboard":
+            self.home()
+        elif name == "Add Student":
+            self.add()
+        elif name == "Add Marks":
+            self.marks()
+        elif name == "Report":
+            self.report()
+        elif name == "Exit":
+            self.win.destroy()
 
-            menu_items = [ "Dashboard" , "Add New" , "Add Marks" , "View Marks" , "Exit" ]
-            self.all_btns = {}
-            for m in menu_items:
-                  bb = tk.Button( left , text = m , fg="white" , bg="#1E293B" ,
-                          font=("Poppins" ,13) , relief= "flat" , anchor="w" , padx=30 ,
-                          activebackground="#3B82F6" , activeforeground="white" ,
-                          command= lambda x = m : self.goto( x ))
-                  bb.pack( fill = "x" , pady= 4 )
-                  self.all_btns[ m ] = bb
+    def home(self):
+        tk.Label(self.main, text="Dashboard", font=("Poppins", 18, "bold"), bg="white").place(x=30, y=30)
+        s1 = self.cur.execute("SELECT COUNT(*) FROM students").fetchone()[0]
+        s2 = self.cur.execute("SELECT COUNT(*) FROM marks").fetchone()[0]
+        stats = [(s1, "Students"), ("-", "Classes"), ("-", "Subjects"), (s2, "Marks")]
+        for i, (val, txt) in enumerate(stats):
+            f = tk.Frame(self.main, bg="#3B82F6", width=220, height=100)
+            f.place(x=30 + i*240, y=80)
+            tk.Label(f, text=val, font=("Poppins", 20, "bold"), bg="#3B82F6", fg="white").place(x=20, y=10)
+            tk.Label(f, text=txt, font=("Poppins", 12), bg="#3B82F6", fg="white").place(x=20, y=55)
 
+    def add(self):
+        tk.Label(self.main, text="Add Student", font=("Poppins", 16, "bold"), bg="white").place(x=30, y=30)
+        self.entries = {}
+        fields = ["ID", "Name", "DOB", "Gender", "Address"]
+        y = 80
+        for f in fields:
+            tk.Label(self.main, text=f, bg="white", font=("Poppins", 12)).place(x=30, y=y)
+            e = tk.Entry(self.main, font=("Poppins", 12), width=40)
+            e.place(x=180, y=y)
+            self.entries[f] = e
+            y += 40
+        tk.Button(self.main, text="Save", bg="#3B82F6", fg="white", font=("Poppins", 12), command=self.save_stud).place(x=180, y=y)
 
+    def save_stud(self):
+        data = {k: v.get().strip() for k, v in self.entries.items()}
+        if not data["ID"]:
+            return messagebox.showwarning("No ID", "Enter ID")
+        if self.cur.execute("SELECT * FROM students WHERE id = ?", (data["ID"],)).fetchone():
+            return messagebox.showwarning("Exists", "ID exists already")
+        self.cur.execute("INSERT INTO students VALUES (?, ?, ?, ?, ?)",
+                         (data["ID"], data["Name"], data["DOB"], data["Gender"], data["Address"]))
+        self.db.commit()
+        messagebox.showinfo("Saved", "Student added")
+        for e in self.entries.values():
+            e.delete(0, tk.END)
 
-      def body( self ):
-            self.main = tk.Frame( self.window , bg="white"  )
-            self.main.place( x=240 , y=0 , width=1200 , height=1024 )
+    def marks(self):
+        tk.Label(self.main, text="Add Marks", font=("Poppins", 16, "bold"), bg="white").place(x=30, y=30)
+        tk.Label(self.main, text="ID", bg="white", font=("Poppins", 12)).place(x=30, y=80)
+        ids = [x[0] for x in self.cur.execute("SELECT id FROM students").fetchall()]
+        self.sid = ttk.Combobox(self.main, values=ids, width=40)
+        self.sid.place(x=180, y=80)
 
+        tk.Label(self.main, text="Subject", bg="white", font=("Poppins", 12)).place(x=30, y=130)
+        self.sub = tk.Entry(self.main, font=("Poppins", 12), width=40)
+        self.sub.place(x=180, y=130)
 
-      def clean( self ):
-            for w in self.main.winfo_children():
-                  w.destroy()
+        tk.Label(self.main, text="Marks", bg="white", font=("Poppins", 12)).place(x=30, y=180)
+        self.mark = tk.Entry(self.main, font=("Poppins", 12), width=40)
+        self.mark.place(x=180, y=180)
 
+        tk.Button(self.main, text="Add", bg="#3B82F6", fg="white", font=("Poppins", 12), command=self.save_mark).place(x=180, y=230)
 
-      def goto( self , screen ):
-            if hasattr( self , "on" ):
-                  self.all_btns[ self.on ].configure(bg="#1E293B"  )
-            self.all_btns[screen].configure( bg="#3B82F6" )
-            self.on = screen
-            self.clean()
+    def save_mark(self):
+        sid = self.sid.get().strip()
+        sub = self.sub.get().strip()
+        mark = self.mark.get().strip()
+        if not sid or not sub or not mark.isdigit():
+            return messagebox.showwarning("Error", "Fill all correctly")
+        self.cur.execute("INSERT INTO marks VALUES (?, ?, ?)", (sid, sub, int(mark)))
+        self.db.commit()
+        messagebox.showinfo("Saved", "Mark added")
+        self.sub.delete(0, tk.END)
+        self.mark.delete(0, tk.END)
 
-            if screen == "Dashboard":
-                  self.show_home()
-            elif screen == "Add New":
-                  self.add_page( )
-            elif screen == "Add Marks":
-                  self.marks_page( )
-            elif screen == "View Marks":
-                  self.report( )
-            elif screen == "Exit":
-                  self.window.destroy()
-
-
-
-      def show_home(self):
-            tk.Label( self.main , text="Student Zone" , font=("Poppins", 19, "bold") , bg="white" ).place( x=30 , y=30 )
-
-            stats = [
-                  ( len( self.data ) , "Total Students" ),
-                  ( "-" , "Class Count" ),
-                  ( "-" , "Subjects" ),
-                  ( sum( len(v) for v in self.marks.values() ) , "Total Marks" )
-            ]
-
-            for i , (v , l) in enumerate( stats ):
-                  card = tk.Frame( self.main , bg="#3B82F6" , width=220 , height=100 )
-                  card.place( x=30 + i*240 , y=80 )
-                  tk.Label( card , text= v , font=("Poppins",20,"bold"), bg="#3B82F6" , fg="white" ).place( x=20 , y=10 )
-                  tk.Label( card , text= l , font=("Poppins",12), bg="#3B82F6", fg="white" ).place( x=20 , y=55 )
-
-
-
-      def add_page( self ):
-            tk.Label( self.main , text="Add Student Info" , font=("Poppins", 16 , "bold" ), bg="white" ).place( x=30 , y=30 )
-
-            fields = [ "ID" , "Name" , "DOB" , "Gender" , "Address" ]
-            self.inputs = { }
-            y = 80
-            for f in fields:
-                  tk.Label( self.main , text=f , font=("Poppins",12) , bg="white" ).place( x=30 , y=y )
-                  ent = tk.Entry( self.main , font=("Poppins",12) , width=40 , bd=1 , relief="solid" )
-                  ent.place( x=180 , y=y )
-                  self.inputs[ f ] = ent
-                  y += 50
-
-            tk.Button( self.main , text="Save" , font=("Poppins",12) ,
-                  bg="#3B82F6" , fg="white" , command=self.save_student ).place( x=180 , y= y + 10 )
-
-
-
-      def save_student( self ):
-            dat = { k: v.get().strip() for k , v in self.inputs.items() }
-            sid = dat[ "ID" ]
-
-            if sid == "":
-                  return messagebox.showwarning( "Missing" , "Need ID first" )
-            if sid in self.data:
-                  return messagebox.showwarning( "Oops" , "ID already used" )
-
-            self.data[ sid ] = {
-                  "name": dat[ "Name" ],
-                  "dob": dat[ "DOB" ],
-                  "gender": dat[ "Gender" ],
-                  "address": dat[ "Address" ]
-            }
-
-            messagebox.showinfo( "Saved" , f"{sid} added!" )
-
-            for x in self.inputs.values():
-                  x.delete( 0 , tk.END )
-
-
-
-      def marks_page( self ):
-            tk.Label( self.main , text="Enter Marks" , font=("Poppins", 16 , "bold") , bg="white" ).place( x=30 , y=30 )
-
-            tk.Label( self.main , text="Student ID" , font=("Poppins",12) , bg="white" ).place( x=30 , y=80 )
-            self.combo = ttk.Combobox( self.main , values=list( self.data.keys() ) , width=37 )
-            self.combo.place( x=180 , y=80 )
-
-            tk.Label( self.main , text="Subject" , font=("Poppins",12) , bg="white" ).place( x=30 , y=130 )
-            self.sub = tk.Entry( self.main , font=("Poppins",12) , width=40 , bd=1 , relief="solid" )
-            self.sub.place( x=180 , y=130 )
-
-            tk.Label( self.main , text="Marks" , font=("Poppins",12) , bg="white" ).place( x=30 , y=180 )
-            self.markz = tk.Entry( self.main , font=("Poppins",12) , width=40 , bd=1 , relief="solid" )
-            self.markz.place( x=180 , y=180 )
-
-            tk.Button( self.main , text="Add" , font=("Poppins",12) ,
-                       bg="#3B82F6" , fg="white" , command=self.save_marks ).place( x=180 , y=230 )
-
-
-
-      def save_marks( self ):
-            sid = self.combo.get().strip()
-            s = self.sub.get().strip()
-            m = self.markz.get().strip()
-
-            if sid not in self.data:
-                  return messagebox.showwarning( "Wrong ID bro" , "That ID doesn't exist." )
-
-            if not s or not m.isdigit():
-                  return messagebox.showwarning( "Uhh" , "Type subject and marks (as numbers)" )
-
-            if sid not in self.marks:
-                  self.marks[ sid ] = []
-
-            self.marks[ sid ].append( (s, int(m)) )
-            messagebox.showinfo( "Done" , f"{s} → {m} added." )
-
-            self.sub.delete( 0 , tk.END )
-            self.markz.delete( 0 , tk.END )
-
-
-
-      def report( self ):
-            tk.Label( self.main , text="Student Reports" , font=("Poppins",16,"bold") , bg="white" ).place( x=30 , y=30 )
-
-            cols = ("ID" , "Name" , "Subjects" , "Average")
-            view = ttk.Treeview( self.main , columns=cols , show="headings" )
-
-            for c in cols:
-                  view.heading( c , text=c )
-                  view.column( c , width=180 )
-
-            for sid , val in self.data.items():
-                  data_list = self.marks.get( sid , [] )
-                  subz = ", ".join( s for s, _ in data_list ) if data_list else "-"
-                  avg = f"{sum( m for _, m in data_list ) / len( data_list ):.1f}" if data_list else "-"
-                  view.insert( "" , "end" , values=( sid , val["name"] , subz , avg ) )
-
-            view.place( x=30 , y=80 , width=800 , height=400 )
-
-
+    def report(self):
+        tk.Label(self.main, text="Report", font=("Poppins", 16, "bold"), bg="white").place(x=30, y=30)
+        cols = ("ID", "Name", "Subjects", "Average")
+        tree = ttk.Treeview(self.main, columns=cols, show="headings")
+        for col in cols:
+            tree.heading(col, text=col)
+            tree.column(col, width=180)
+        for s in self.cur.execute("SELECT * FROM students").fetchall():
+            sid, name = s[0], s[1]
+            data = self.cur.execute("SELECT subject, marks FROM marks WHERE sid=?", (sid,)).fetchall()
+            subs = ", ".join(x[0] for x in data) if data else "-"
+            avg = f"{sum(x[1] for x in data)/len(data):.1f}" if data else "-"
+            tree.insert("", "end", values=(sid, name, subs, avg))
+        tree.place(x=30, y=80, width=800, height=400)
 
 if __name__ == "__main__":
-      Student( )
+    Student()
