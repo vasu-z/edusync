@@ -1,4 +1,4 @@
-# Student Management System
+# Student Grade Management System
 
 This is a basic student info and marks management system using Python and Tkinter.
 
